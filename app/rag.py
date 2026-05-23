@@ -47,9 +47,11 @@ def _score(query_tokens: list[str], chunk_text: str) -> float:
     return sum(freq.get(t, 0) / len(chunk_tokens) for t in set(query_tokens))
 
 
-def retrieve(query: str, top_k: int = TOP_K) -> str:
-    """Return the top-k most relevant document chunks as a single context string."""
+def retrieve(query: str, top_k: int = TOP_K) -> tuple[str, list[str]]:
+    """Return (context string, deduplicated source filenames) for the top-k chunks."""
     query_tokens = _tokenize(query)
     ranked = sorted(_CHUNKS, key=lambda c: _score(query_tokens, c["text"]), reverse=True)
     top = ranked[:top_k]
-    return "\n\n---\n\n".join(f"[Source: {c['source']}]\n{c['text']}" for c in top)
+    context = "\n\n---\n\n".join(f"[Source: {c['source']}]\n{c['text']}" for c in top)
+    sources = list(dict.fromkeys(c["source"] for c in top))  # ordered, deduplicated
+    return context, sources

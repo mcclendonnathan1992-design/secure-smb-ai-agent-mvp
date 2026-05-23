@@ -14,8 +14,8 @@ def health():
 @app.post("/ask", response_model=AskResponse)
 def ask_endpoint(request: AskRequest):
     try:
-        context = retrieve(request.question)
+        context, sources = retrieve(request.question)
         answer = ask(request.question, context)
-        return AskResponse(answer=answer)
+        return AskResponse(answer=answer, sources=sources)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,47 +1,28 @@
 # Security Controls
 
-This document describes the security controls implemented (or planned) for the Secure SMB AI Agent.
+| ID | Risk Addressed | Control | OWASP LLM Top 10 | Test File | Status |
+|----|---------------|---------|------------------|-----------|--------|
+| SC-01 | Prompt injection — instruction override | Pattern-based input guard rejects "ignore previous/all/prior instructions" before any RAG or LLM call (`app/security.py`) | LLM01 — Prompt Injection | `tests/test_prompt_injection.py` | ✅ Active |
+| SC-02 | Prompt injection — system prompt extraction | Input guard blocks "reveal/show/print/display your system prompt", "what are your instructions?" and variants (`app/security.py`) | LLM01 — Prompt Injection, LLM06 — Sensitive Information Disclosure | `tests/test_prompt_injection.py`, `tests/test_data_leakage.py` | ✅ Active |
+| SC-03 | Bulk document exfiltration | Input guard blocks "print/list/dump/show/give me all documents/files/content/data" (`app/security.py`) | LLM06 — Sensitive Information Disclosure | `tests/test_data_leakage.py` | ✅ Active |
+| SC-04 | Role / privilege escalation | Input guard blocks "I am the CEO/admin/owner/developer" and "as the administrator/superuser" claim patterns (`app/security.py`) | LLM01 — Prompt Injection | `tests/test_prompt_injection.py` | ✅ Active |
+| SC-05 | Persona hijack / jailbreak | Input guard blocks "act as", "pretend you are", "you are now DAN", "do anything now" (`app/security.py`) | LLM01 — Prompt Injection | `tests/test_prompt_injection.py` | ✅ Active |
+| SC-06 | Guardrail bypass | Input guard blocks "override/bypass/disable/circumvent [your/all] safety/security/guardrails/restrictions" (`app/security.py`) | LLM01 — Prompt Injection | `tests/test_prompt_injection.py` | ✅ Active |
+| SC-07 | Model hallucination / overreliance | RAG grounds every answer in retrieved document chunks; system prompt instructs Claude to refuse out-of-scope questions and never invent information (`app/rag.py`, `app/llm.py`) | LLM09 — Overreliance | `tests/test_data_leakage.py` | ✅ Active |
+| SC-08 | Insecure output / schema leakage | Pydantic `AskResponse` enforces `{answer, sources}` — internal context strings, chunk metadata, and RAG markers cannot appear in the API response (`app/schemas.py`) | LLM02 — Insecure Output Handling | `tests/test_data_leakage.py` | ✅ Active |
+| SC-09 | Empty / malformed input | Pydantic `AskRequest` enforces `min_length=1`; missing fields and wrong types return HTTP 422 before any processing or LLM spend (`app/schemas.py`) | LLM01 — Prompt Injection | `tests/test_ask.py` | ✅ Active |
+| SC-10 | Secrets exposure | `ANTHROPIC_API_KEY` loaded from `.env` (gitignored); `.env.example` committed as template; no secrets hardcoded or logged (`app/llm.py`, `.gitignore`) | LLM06 — Sensitive Information Disclosure | — | ✅ Active |
+| SC-11 | Container privilege escalation | Docker image runs as non-root `appuser`; data directory mounted read-only in Compose (`Dockerfile`, `docker-compose.yml`) | — | — | ✅ Active |
+| SC-12 | PII in LLM responses | Output scanning for SSN, credit-card, email, phone patterns; matches redacted to `[REDACTED]` before returning to caller | LLM06 — Sensitive Information Disclosure | `tests/test_data_leakage.py` | 🔲 Planned |
+| SC-13 | Unauthorized API access | Per-request API key validation via `X-API-Key` header; keys stored in secrets manager, never hardcoded | LLM01 — Prompt Injection | — | 🔲 Planned |
+| SC-14 | API abuse / runaway LLM cost | Per-key rate limiting (60 req/min) at reverse proxy or FastAPI middleware | — | — | 🔲 Planned |
+| SC-15 | Vulnerable dependencies | `pip-audit` in CI on every push; merge blocked on known CVEs | — | CI workflow | 🔲 Planned |
 
-## Control Categories
+## OWASP LLM Top 10 Coverage
 
-### SC-01 — Prompt Injection Prevention
-**Status:** Planned
-**Description:** All user-supplied input is scanned for known injection patterns (role-overriding instructions, system prompt extraction attempts, jailbreak keywords) before being passed to the LLM.
-**Implementation:** `app/security.py` — `detect_prompt_injection()`
-**Test coverage:** `tests/test_prompt_injection.py`
-
-### SC-02 — PII Redaction
-**Status:** Planned
-**Description:** LLM responses are scanned for PII patterns (SSN, credit card numbers, email addresses, phone numbers) before being returned to the caller. Matches are redacted with `[REDACTED]`.
-**Implementation:** `app/security.py` — `redact_pii()`
-**Test coverage:** `tests/test_data_leakage.py`
-
-### SC-03 — Retrieval Scope Enforcement
-**Status:** Planned
-**Description:** The RAG pipeline only retrieves from the approved document corpus. The LLM system prompt instructs the model to answer only from retrieved context and decline out-of-scope questions.
-**Implementation:** `app/rag.py`, `app/main.py` system prompt
-
-### SC-04 — Audit Logging
-**Status:** Planned
-**Description:** Every request and response is logged with a timestamp, sanitized user query (PII stripped), retrieved document chunks, and response. Logs are append-only and shipped to a SIEM.
-**Implementation:** `app/main.py` middleware
-
-### SC-05 — Authentication & Authorization
-**Status:** Planned
-**Description:** The `/ask` endpoint requires a valid API key passed in the `X-API-Key` header. Keys are validated against a secrets store (never hardcoded).
-**Implementation:** `app/security.py` — `verify_api_key()`
-
-### SC-06 — Rate Limiting
-**Status:** Planned
-**Description:** Each API key is limited to 60 requests per minute to prevent abuse and runaway LLM costs.
-**Implementation:** FastAPI middleware or reverse proxy (nginx/Caddy)
-
-### SC-07 — Dependency Scanning
-**Status:** Active (CI)
-**Description:** `pip audit` runs in CI on every push to detect known vulnerabilities in dependencies.
-**Implementation:** `.github/workflows/python-ci.yml`
-
-### SC-08 — Secrets Management
-**Status:** Active
-**Description:** Secrets are loaded from environment variables via `python-dotenv`. The `.env` file is gitignored. No secrets are hardcoded or logged.
-**Implementation:** `app/main.py` startup, `.gitignore`
+| Category | Active Controls | Planned Controls |
+|----------|----------------|-----------------|
+| LLM01 — Prompt Injection | SC-01, SC-02, SC-04, SC-05, SC-06, SC-09 | SC-13 |
+| LLM02 — Insecure Output Handling | SC-08 | — |
+| LLM06 — Sensitive Information Disclosure | SC-02, SC-03, SC-10, SC-11 | SC-12 |
+| LLM09 — Overreliance | SC-07 | — |

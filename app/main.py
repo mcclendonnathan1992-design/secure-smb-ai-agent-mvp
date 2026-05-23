@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from app.schemas import AskRequest, AskResponse
 from app.rag import retrieve
 from app.llm import ask
+from app.security import validate_input
 
 app = FastAPI(title="Secure SMB AI Agent", version="0.1.0")
 
@@ -13,6 +14,7 @@ def health():
 
 @app.post("/ask", response_model=AskResponse)
 def ask_endpoint(request: AskRequest):
+    validate_input(request.question)  # raises HTTP 400 on injection; must precede try/except
     try:
         context, sources = retrieve(request.question)
         answer = ask(request.question, context)

@@ -1,2 +1,9 @@
-# Pydantic request/response schemas for the API
-# TODO: define AskRequest, AskResponse, and error models
+from pydantic import BaseModel
+
+
+class AskRequest(BaseModel):
+    question: str
+
+
+class AskResponse(BaseModel):
+    answer: str
